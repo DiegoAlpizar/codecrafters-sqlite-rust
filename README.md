@@ -1,4 +1,4 @@
-![progress-banner](https://codecrafters.io/landing/images/default_progress_banners/sqlite.png)
+![progress-banner](https://app.codecrafters.io/progress/sqlite/4c3f789d-1ae1-44c2-ad3c-5869332f4489)
 
 This is a starting point for Rust solutions to the
 ["Build Your Own SQLite" Challenge](https://codecrafters.io/challenges/sqlite).
