@@ -1,7 +1,7 @@
 use anyhow::{bail, Result};
 use nom::number::streaming::u16;
 use std::fs::File;
-use std::io::prelude::*;
+use std::io::{prelude::*, BufReader, SeekFrom};
 use std::os::unix::prelude::FileExt;
 
 fn main() -> Result<()> {
@@ -43,7 +43,7 @@ fn main() -> Result<()> {
 
             file.read_exact_at( &mut cell_ptr_arr , 108 ) ? ;
 
-
+            let mut file_buf    =   BufReader::new( &file );
 
             for i in ( 0 .. cell_ptr_arr.len() ).step_by( 2 )
             {
@@ -51,7 +51,12 @@ fn main() -> Result<()> {
     
                 //let next_cell_ptr   =   cell_ptr_iter.next().unwrap() ;
                 let next_cell    =  u16::from_be_bytes( [ cell_ptr_arr[ i ] , cell_ptr_arr[ i+1 ] ] ) as u64 ;
-    
+                
+                file_buf.seek( SeekFrom::Start( next_cell ) ) ? ;
+                
+                //let algo    =   file_buf..bytes().next().unwrap() ;
+                let algo    =   file_buf.read(buf)
+
                 let mut cell_header   =   [ 0 , 2 ] ;
                 file.read_at( &mut cell_header , next_cell ) ? ;
     
@@ -64,6 +69,8 @@ fn main() -> Result<()> {
                 file.read_exact_at( &mut record , next_cell + 2 ) ? ;
     
                 let record_header_size  =   record[ 0 ] ;
+
+                //record_header_size.leading_ones()
     
                 let record_header   =   &record[ .. record_header_size as usize ] ;
                 
@@ -128,6 +135,9 @@ fn main() -> Result<()> {
                 println!( "Table Name:\t{}" , String::from_utf8( table_name.to_vec() ).unwrap() );
                 println!( "Root page:\t{:?}" , root_page );
                 println!( "SQL statement:\t{}" , String::from_utf8( sql_statement.to_vec() ).unwrap() );
+
+                println!( "Blah:\t{:b}\t{:08b}\t{}" , 0b_11000010_u8 , serial_type_5 >> 2 , 0b_01100010_u8.leading_zeros() );
+                println!( "Algo:\t{}" , algo.unwrap() );
             }
 
 
