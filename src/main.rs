@@ -4,6 +4,45 @@ use std::fs::File;
 use std::io::{prelude::*, BufReader, SeekFrom};
 use std::os::unix::prelude::FileExt;
 
+
+
+type VarInt     =   u64 ;
+type BytesRead  =   usize ;
+
+
+fn get_varint (buf: [u8 ; 2]) -> (VarInt , BytesRead) {
+
+    let mut var_int =   [ 0 ; 8 ] ;
+    let mut bytes_read  =   0 ;
+
+    for (i , byte) in buf.iter().enumerate()
+    {
+        if byte.leading_zeros() >= 1
+        {
+            var_int[ i ]    =   *byte ;
+        }
+        else
+        {
+            let mask    =   byte & 0b_0111_1111 ;
+            println!( "Mask:\t{:08b}" , mask );
+            
+            var_int[ i ]    =   mask ;
+        }
+        
+        bytes_read  =   i + 1 ;
+    }
+    
+    var_int.map( |byte| byte.to_string() );
+    let integer =   u64::from_be_bytes( var_int );
+    //u64::from
+    
+    return  (integer , bytes_read) ;
+
+    //return (0 , 0) ;
+}
+
+
+
 fn main() -> Result<()> {
     // Parse arguments
     let args = std::env::args().collect::<Vec<_>>();
@@ -55,7 +94,8 @@ fn main() -> Result<()> {
                 file_buf.seek( SeekFrom::Start( next_cell ) ) ? ;
                 
                 //let algo    =   file_buf..bytes().next().unwrap() ;
-                let algo    =   file_buf.read(buf)
+                let mut my_tmp_buf  =   [ 0 , 2 ] ;
+                file_buf.read( &mut my_tmp_buf ) ? ;
 
                 let mut cell_header   =   [ 0 , 2 ] ;
                 file.read_at( &mut cell_header , next_cell ) ? ;
@@ -137,7 +177,7 @@ fn main() -> Result<()> {
                 println!( "SQL statement:\t{}" , String::from_utf8( sql_statement.to_vec() ).unwrap() );
 
                 println!( "Blah:\t{:b}\t{:08b}\t{}" , 0b_11000010_u8 , serial_type_5 >> 2 , 0b_01100010_u8.leading_zeros() );
-                println!( "Algo:\t{}" , algo.unwrap() );
+                println!( "my_tmp_buf:\t{:X?}" , my_tmp_buf );
             }
 
 
@@ -153,9 +193,48 @@ fn main() -> Result<()> {
 
             // Uncomment this block to pass the first stage
             println!("database page size: {}", page_size);
+            println!( "adsfADSFA:\t{}" , 0b_0011_1111__1111_1111 );
+            println!( "adsfADSFA:\t{}" , 0b_0001_1111__1111_1111___1111_1111 );
+            println!( "adsfADSFA:\t{}" , 0b_0111_1111 );
+            println!( "adsfADSFA:\t{}" , 0b_0010_0000_1100_0001 );// 1100_0001 0100_0001
         }
         _ => bail!("Missing or invalid command passed: {}", command),
     }
 
     Ok(())
+}
+
+
+
+#[ cfg( test ) ]
+mod tests {
+
+    use super::* ;
+
+
+    #[ test ]
+    fn correct_one_byte_int () 
+    {
+        let buf   =   [ 0b_0000_0001_u8 , 0 ] ;
+        let buf_2   =   [ 2 , 6 ] ;
+        
+        //1000_0000 0000_0001
+        //1100_0000 0000_0000
+        //1000_0001 0100_0000
+        //1001_0010 1000_0001 0111_000
+
+        assert_eq!( get_varint( buf ) , (1 , 1) );
+        assert_eq!( get_varint( buf_2 ) , (2 , 1) );
+    }
+
+
+    #[ test ]
+    fn two_byte_spanning_int () {
+
+        let buf =   [ 0b_1000_0001 , 0000_0000 ] ;
+
+        assert_eq!( get_varint( buf ) , (0b_1000_0000 , 2) );
+
+    }
+
 }
