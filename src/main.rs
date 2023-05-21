@@ -10,30 +10,48 @@ type VarInt     =   u64 ;
 type BytesRead  =   usize ;
 
 
-fn get_varint (buf: [u8 ; 2]) -> (VarInt , BytesRead) {
+fn get_varint (buf: Vec< u8 >) -> (VarInt , BytesRead) {
 
     let mut var_int =   [ 0 ; 8 ] ;
     let mut bytes_read  =   0 ;
+    let mut aja =   false ;
 
     for (i , byte) in buf.iter().enumerate()
     {
         if byte.leading_zeros() >= 1
         {
-            var_int[ i ]    =   *byte ;
+            let my_mask =   if aja { *byte | 0b_1000_0000 } else { *byte } ;
+
+            println!( "My_Mask:\t{:08b}" , my_mask );
+            var_int[ i ]    =   my_mask ;
         }
         else
         {
-            let mask    =   byte & 0b_0111_1111 ;
+            aja =   byte.trailing_ones() >= 1 ;
+            println!( "Aja:\t{}" , aja );
+            
+            let mut mask    =   byte & 0b_0111_1111 ;
             println!( "Mask:\t{:08b}" , mask );
             
+            mask    =   mask >> 1 ;
+            
+            println!( "Mask:\t{:08b}" , mask );
             var_int[ i ]    =   mask ;
         }
         
         bytes_read  =   i + 1 ;
     }
     
-    var_int.map( |byte| byte.to_string() );
-    let integer =   u64::from_be_bytes( var_int );
+    println!( "var_int:\t{:?}" , var_int );
+
+    loop {
+        if var_int[ 0 ] != 0 { break ; }
+        println!( "rotated!" );
+        var_int.rotate_left( 1 );
+    }
+
+    let integer =   u64::from_ne_bytes( var_int );
+    println!( "integer:\t{:08b}" , integer );
     //u64::from
     
     return  (integer , bytes_read) ;
@@ -193,10 +211,11 @@ fn main() -> Result<()> {
 
             // Uncomment this block to pass the first stage
             println!("database page size: {}", page_size);
-            println!( "adsfADSFA:\t{}" , 0b_0011_1111__1111_1111 );
-            println!( "adsfADSFA:\t{}" , 0b_0001_1111__1111_1111___1111_1111 );
-            println!( "adsfADSFA:\t{}" , 0b_0111_1111 );
-            println!( "adsfADSFA:\t{}" , 0b_0010_0000_1100_0001 );// 1100_0001 0100_0001
+            let dfasfs  =   0b_0011_0001_u8 >> 1 ;
+            println!( "adsfADSFA:\t{}\t{:08b}" , dfasfs , dfasfs );
+            let kk  =   0b_1000_0001_u8 ;
+            println!( "adsfADSFA:\t{:08b}\t{:08b}\t{:08b}" , kk & 0b_0000_0001 , kk | 0b_0001_0001 , kk ^ 0b_0000_0001 );
+            
         }
         _ => bail!("Missing or invalid command passed: {}", command),
     }
@@ -215,25 +234,92 @@ mod tests {
     #[ test ]
     fn correct_one_byte_int () 
     {
-        let buf   =   [ 0b_0000_0001_u8 , 0 ] ;
-        let buf_2   =   [ 2 , 6 ] ;
+        let buf   =   vec![ 0b_0000_0001_u8 ] ;
+        let buf_2   =   vec![ 2 ] ;
+        let buf_3   =   vec![ 0b_0111_1111 ] ;
         
-        //1000_0000 0000_0001
-        //1100_0000 0000_0000
-        //1000_0001 0100_0000
-        //1001_0010 1000_0001 0111_000
-
         assert_eq!( get_varint( buf ) , (1 , 1) );
         assert_eq!( get_varint( buf_2 ) , (2 , 1) );
+        assert_eq!( get_varint( buf_3 ) , (0b_0111_1111 , 1) );
+    }
+    
+    
+    #[ test ]
+    fn shifts () {
+        
+        //1100_0000 0000_0000
+        let buf =   vec![ 0b_1100_0000 , 0 ] ;
+        
+        assert_eq!( get_varint( buf ) , (0b_0010_0000__0000_0000 , 2) );
+        
+    }    
+    
+    
+    #[ test ]
+    fn shifts_preserving_last_byte () {
+        
+        let buf_2 =   vec![ 0b_1001_0000 , 0000_0001 ] ;
+        assert_eq!( get_varint( buf_2 ) , (0b_0000_1000__0000_0001 , 2) );
+
     }
 
 
     #[ test ]
-    fn two_byte_spanning_int () {
+    fn carries_trailing_bit_over_to_the_next_byte () {
+        
+        let buf =   vec![ 0b_1000_0001 , 0000_0000 ] ;
+        
+        assert_eq!( get_varint( buf ) , (0b_0000_0000__1000_0000 , 2) );
+        
+    }
+    
+    
+    #[ test ]
+    fn carries_trailing_bit_over_to_the_next_byte_preserving_last_byte () {
+        
+        let buf_2 =   vec![ 0b_1000_0001 , 0000_0001 ] ;
+        assert_eq!( get_varint( buf_2 ) , (0b_0000_0000__1000_0001 , 2) );
+        
+    }
+    
+    
+    #[ test ]
+    fn shifts_and_carries_trailing_bit_over_to_the_next_byte_preserving_last_byte () {
 
-        let buf =   [ 0b_1000_0001 , 0000_0000 ] ;
+        let buf =   vec![ 0b_1001_0001 , 0b_0100_0000 ] ;
+        
+        assert_eq!( get_varint( buf ) , (0b_0000_1000__1100_0000 , 2) );
+        
+    }
+    
+    
+    #[ test ]    
+    fn nose () {
+        
+        //1001_0010 1000_0001 0111_000
+        let buf =   vec![ 0b_1001_0010 , 0b_1000_0001 , 0b_0000_0001 ] ;
+        let buf_2 =   vec![ 0b_1001_0010 , 0b_1001_0001 , 0b_0000_0001 ] ;
+        let buf_3 =   vec![ 0b_1001_0010 , 0b_1100_0001 , 0b_0000_0001 ] ;
+        let buf_x =   vec![ 0b_1000_1000 , 0b_1111_0111 , 0b_0000_1000 ] ;
+        
+        //    0001000 1110111 0001000
+        // 0000_0010__00 11_1011__1 000_1000
+        
+        assert_eq!( get_varint( buf_x ) , (0b_0000_0010__0011_1011__1000_1000 , 2) );
 
-        assert_eq!( get_varint( buf ) , (0b_1000_0000 , 2) );
+        assert_eq!( get_varint( buf ) , (0b_0000_1001__0000_0000__1000_0001 , 2) );
+        assert_eq!( get_varint( buf_2 ) , (0b_0000_1001__0000_1000__1000_0001 , 2) );
+        assert_eq!( get_varint( buf_3 ) , (0b_0000_1001__0010_0000__1000_0001 , 2) );
+
+    }
+
+
+    #[ test ]
+    fn handles_null_bytes () {
+        
+        let buf_2   =   vec![ 0b_1000_0000 , 1 ] ;
+        
+        assert_eq!( get_varint( buf_2 ) , (1 , 2) );
 
     }
 
